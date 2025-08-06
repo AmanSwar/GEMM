@@ -22,23 +22,26 @@
     }                                                                          \
   }
 
-bool verify(float *kernel_out, float *cublas_out, int size) {
+template <class dtype>
+bool verify(dtype *kernel_out, dtype *cublas_out, int size) {
 
   for (int i = 0; i < size; i++) {
-    if (std::abs(kernel_out[i] - cublas_out[i]) > 1e-3) {
-      std::cout << kernel_out[i] << " " << cublas_out[i] << std::endl;
+    if (std::fabs(kernel_out[i] - cublas_out[i]) > 1e-3) {
+      std::cout << static_cast<float>(kernel_out[i]) << " " << static_cast<float>(cublas_out[i]) << std::endl;
+      // printf("kernel out : %f  || cublas out : %f"  , kernel_out[i] , cublas_out[i]);
       return false;
     }
   }
-  std::cout << kernel_out[100] << " " << cublas_out[100] << std::endl;
+  std::cout << static_cast<float>(kernel_out[10]) << " "
+            << static_cast<float>(cublas_out[10]) << std::endl;
   return true;
 }
 
-
-void init(float *arr, int size) {
+template <class dtype>
+void init(dtype *arr, int size) {
   for (int i = 0; i < size; i++) {
     // arr[i] = static_cast<float>(std::rand()) / (static_cast<float>(RAND_MAX) + 1.0f);
-    arr[i]= float(i) / size;
+    arr[i]= i / size;
   }
 }
 
