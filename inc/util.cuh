@@ -11,6 +11,16 @@
 #define N 2048
 #define K 1024
 
+#define CUDA_CHECK(err)                                                        \
+  {                                                                            \
+    cudaError_t err_ = (err);                                                  \
+    if (err_ != cudaSuccess) {                                                 \
+      fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__,         \
+              cudaGetErrorString(err_));                                       \
+      exit(EXIT_FAILURE);                                                      \
+    }                                                                          \
+  }
+
 bool verify(float *kernel_out, float *cublas_out, int size) {
 
   for (int i = 0; i < size; i++) {
@@ -19,13 +29,15 @@ bool verify(float *kernel_out, float *cublas_out, int size) {
       return false;
     }
   }
+  std::cout << kernel_out[100] << " " << cublas_out[100] << std::endl;
   return true;
 }
 
 
 void init(float *arr, int size) {
   for (int i = 0; i < size; i++) {
-    arr[i] = static_cast<float>(std::rand()) / (static_cast<float>(RAND_MAX) + 1.0f);
+    // arr[i] = static_cast<float>(std::rand()) / (static_cast<float>(RAND_MAX) + 1.0f);
+    arr[i]= float(i) / size;
   }
 }
 
@@ -110,6 +122,7 @@ void benchmark(void (*func)(float *, float *, float *),
   int ITER = 100;
   // init run
   func(da, db, dc);
+  CUDA_CHECK(cudaGetLastError());
 
   cudaEventRecord(start);
   for (int i = 0; i < ITER; i++) {
@@ -128,7 +141,6 @@ void benchmark(void (*func)(float *, float *, float *),
   std::cout << name << " GFLOPS : " << std::fixed << std::setprecision(5)
             << ((FLOP / ((ms / ITER) / 1000))) / 1e9 << std::endl;
 
-  // std::cout << "##########################" << std :: endl;
   std::cout << "------------------------" << std :: endl;
 
   launch_cublass(ha, hb, hd, da, db, dd);
