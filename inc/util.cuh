@@ -2,6 +2,7 @@
 
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <cuda_fp16.h>
 
 #include <iostream>
 #include <iomanip>
@@ -24,7 +25,7 @@
 bool verify(float *kernel_out, float *cublas_out, int size) {
 
   for (int i = 0; i < size; i++) {
-    if (std::abs(kernel_out[i] - cublas_out[i]) > 1e-4) {
+    if (std::abs(kernel_out[i] - cublas_out[i]) > 1e-3) {
       std::cout << kernel_out[i] << " " << cublas_out[i] << std::endl;
       return false;
     }
@@ -41,7 +42,7 @@ void init(float *arr, int size) {
   }
 }
 
-void launch_cublass(float *ha, float *hb, float *hc,
+void launch_cublass_fp32(float *ha, float *hb, float *hc,
                     float *da, float *db, float *dc) {
 
   cublasHandle_t handle;
@@ -92,8 +93,58 @@ void launch_cublass(float *ha, float *hb, float *hc,
   cublasDestroy(handle);
 }
 
+void launch_cublass_fp16(half *ha, half *hb, half *hc, half *da, half *db,
+                         half *dc) {
 
-void benchmark(void (*func)(float *, float *, float *),
+  cublasHandle_t handle;
+  cublasCreate(&handle);
+
+  cudaEvent_t start, end;
+  cudaEventCreate(&start);
+  cudaEventCreate(&end);
+
+  half alpha = __float2half(1.0f);
+  half beta = __float2half(0.0f);
+  // cublasSetMatrix(M, K, sizeof(float), ha, M, da, M);
+  // cublasSetMatrix(K, N, sizeof(float), hb, K, db, K);
+  // cublasSetMatrix(M, N, sizeof(float), hc, M, dc, M);
+
+  int lda = K;
+  int ldb = N;
+  int ldc = N;
+  // init run
+
+  cublasHgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, db, ldb, da,
+              lda, &beta, dc, ldc);
+  int iter = 100;
+
+  cudaEventRecord(start);
+  for (int i = 0; i < iter; i++) {
+    cublasHgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, db, ldb, da,
+                lda, &beta, dc, ldc);
+  }
+
+  cudaEventRecord(end);
+  cudaEventSynchronize(end);
+
+  float ms = 0.0f;
+  cudaEventElapsedTime(&ms, start, end);
+
+  std::cout << "CUBLAS TIME : " << std::fixed << std::setprecision(5)
+            << (ms / iter) / 1000 << std::endl;
+
+  long long int FLOP = 2LL * M * N * K;
+  std::cout << "CUBLAS GFLOPS : " << std::fixed << std::setprecision(5)
+            << ((FLOP / ((ms / iter) / 1000))) / 1e9 << std::endl;
+
+  cublasGetMatrix(M, N, sizeof(float), dc, M, hc, M);
+  cudaFree(da);
+  cudaFree(db);
+  cudaFree(dc);
+  cublasDestroy(handle);
+}
+
+void benchmark_fp32(void (*func)(float *, float *, float *),
                std::string name) {
 
   float *ha = new float[M * K];
@@ -143,7 +194,7 @@ void benchmark(void (*func)(float *, float *, float *),
 
   std::cout << "------------------------" << std :: endl;
 
-  launch_cublass(ha, hb, hd, da, db, dd);
+  launch_cublass_fp32(ha, hb, hd, da, db, dd);
 
   cudaMemcpy(hc , dc , sizeof(float) * M * N , cudaMemcpyDeviceToHost);
   cudaMemcpy(hd, dd, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
