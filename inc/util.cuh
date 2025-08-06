@@ -22,11 +22,11 @@
     }                                                                          \
   }
 
-template <class dtype>
-bool verify(dtype *kernel_out, dtype *cublas_out, int size) {
+template <class dtype1 , class dtype2>
+bool verify(dtype1 *kernel_out, dtype2 *cublas_out, int size) {
 
   for (int i = 0; i < size; i++) {
-    if (std::fabs(kernel_out[i] - cublas_out[i]) > 1e-3) {
+    if (std::fabs(static_cast<float>(kernel_out[i]) - static_cast<float>(cublas_out[i])) > 1e-3) {
       std::cout << static_cast<float>(kernel_out[i]) << " " << static_cast<float>(cublas_out[i]) << std::endl;
       // printf("kernel out : %f  || cublas out : %f"  , kernel_out[i] , cublas_out[i]);
       return false;
@@ -211,19 +211,19 @@ void benchmark_fp16(void (*func)(half *, half *, half *), std::string name) {
 
   half *ha = new half[M * K];
   half *hb = new half[K * N];
-  half *hc = new half[M * N];
+  float *hc = new float[M * N]; // for kernel
   half *hd = new half[M * N]; // for cublas
 
   init(ha, M * K);
   init(hb, K * N);
 
   std::fill(hc, hc + M * N, 0.0f);
-  std::fill(hd, hc + M * N, 0.0f);
+  std::fill(hd, hd + M * N, 0.0f);
 
   half *da, *db, *dc, *dd;
   cudaMalloc(&da, sizeof(half) * M * K);
   cudaMalloc(&db, sizeof(half) * K * N);
-  cudaMalloc(&dc, sizeof(half) * M * N);
+  cudaMalloc(&dc, sizeof(float) * M * N); // for kernel
   cudaMalloc(&dd, sizeof(half) * M * N); // for cublas
 
   cudaMemcpy(da, ha, sizeof(half) * M * K, cudaMemcpyHostToDevice);
