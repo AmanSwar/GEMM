@@ -203,3 +203,62 @@ void benchmark_fp32(void (*func)(float *, float *, float *),
   std::string out = ans ? "PASS" : "FAIL";
   std::cout << "\n"<<out << std::endl; 
 }
+
+void benchmark_fp16(void (*func)(half *, half *, half *), std::string name) {
+
+  half *ha = new half[M * K];
+  half *hb = new half[K * N];
+  half *hc = new half[M * N];
+  half *hd = new half[M * N]; // for cublas
+
+  init(ha, M * K);
+  init(hb, K * N);
+
+  std::fill(hc, hc + M * N, 0.0f);
+  std::fill(hd, hc + M * N, 0.0f);
+
+  half *da, *db, *dc, *dd;
+  cudaMalloc(&da, sizeof(half) * M * K);
+  cudaMalloc(&db, sizeof(half) * K * N);
+  cudaMalloc(&dc, sizeof(half) * M * N);
+  cudaMalloc(&dd, sizeof(half) * M * N); // for cublas
+
+  cudaMemcpy(da, ha, sizeof(half) * M * K, cudaMemcpyHostToDevice);
+  cudaMemcpy(db, hb, sizeof(half) * K * N, cudaMemcpyHostToDevice);
+
+  cudaEvent_t start, end;
+  cudaEventCreate(&start);
+  cudaEventCreate(&end);
+  int ITER = 100;
+  // init run
+  func(da, db, dc);
+  CUDA_CHECK(cudaGetLastError());
+
+  cudaEventRecord(start);
+  for (int i = 0; i < ITER; i++) {
+    func(da, db, dc);
+  }
+  cudaEventRecord(end);
+  cudaEventSynchronize(end);
+
+  float ms = 0.0f;
+  cudaEventElapsedTime(&ms, start, end);
+
+  std::cout << name << " TIME : " << std::fixed << std::setprecision(5)
+            << (ms / ITER) / 1000 << std::endl;
+
+  long long int FLOP = 2LL * M * N * K;
+  std::cout << name << " GFLOPS : " << std::fixed << std::setprecision(5)
+            << ((FLOP / ((ms / ITER) / 1000))) / 1e9 << std::endl;
+
+  std::cout << "------------------------" << std ::endl;
+
+  launch_cublass_fp16(ha, hb, hd, da, db, dd);
+
+  cudaMemcpy(hc, dc, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
+  cudaMemcpy(hd, dd, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
+
+  bool ans = verify(hd, hc, M * N);
+  std::string out = ans ? "PASS" : "FAIL";
+  std::cout << "\n" << out << std::endl;
+}
