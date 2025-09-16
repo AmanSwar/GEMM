@@ -9,7 +9,7 @@
 #define WAIT_ALL_PTX asm volatile("cp.async.wait_all ;") // blocks until all outstanding async copies are completed.
 
 
-__device__ __forceinline__ unsigned long long cvta_to_shared(unsigned long long generic_ptr){
+__device__ __forceinline__ unsigned long long cvta_to_shared(float* generic_ptr){
     unsigned long long shared_addr;
     asm volatile("cvta.to.shared.u64 %0 %1" : "=l"(shared_addr) : "l"(generic_ptr)); // convert address to shared mem addr
 
@@ -47,7 +47,7 @@ __device__ __forceinline__ float ldg32_guard_mov0_ptx(const float* ptr, int guar
 
 __device__ __forceinline__ void sts128_ptx(
     float reg0, float reg1, float reg2 , float reg3,
-    float4* addr
+    uint64_t addr
 ){
     asm volatile(
         "st.shared.v4.f32 [%0] , {%1 , %2 , %3 , %4}; \n\t" : : "l"(addr) , "f"(reg0), "f"(reg1), "f"(reg2), "f"(reg3) // store 4 float into 1 vector register
@@ -63,7 +63,7 @@ __device__ __forceinline__ void lds128_ptx(float4* addr){
 }
 
 
-__device__ __forceinline__ void sts32_ptx(float reg ,float* addr){
+__device__ __forceinline__ void sts32_ptx(float reg ,uint64_t addr){
     asm volatile(
         "st.shared.f32 [%0] , %1;\n" : : "l"(addr) , "f"(reg) // store the value from reg to specified addr in shared mem
     );
