@@ -2,7 +2,6 @@
 #include <mma.h>
 #include <cuda_fp16.h>
 
-#include "../inc/util.cuh"
 using namespace nvcuda;
 
 const int WMMA_M = 16;
@@ -12,8 +11,7 @@ const int WMMA_K = 16;
 #define BLOCK_SIZE 128
 #define WARP_SIZE 32
 
-__global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,
-                                float beta) {
+__global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,float beta , int M , int N , int K) {
 
   int lda = K; 
   int ldb = N;   
@@ -23,12 +21,17 @@ __global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,
   int warpN = (blockIdx.y * blockDim.y + threadIdx.y);
 
   //declare the fragements 
+  //fragments of matrix A (row major) and matrixB (col major)
   wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag;
   wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::col_major> b_frag;
+
+  //accumulator frags in fp32
   wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc_frag;
   wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> c_frag;
 
+  //init frags
   wmma::fill_fragment(acc_frag, 0.0f);  
+
 
   for (int i = 0; i < K; i += WMMA_K) {
     int aRow = warpM * WMMA_M; 
@@ -38,7 +41,6 @@ __global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,
     int bCol = warpN * WMMA_N;
 
     if (aRow < M && aCol < K && bRow < K && bCol < N) {
-      // Row-major addressing: A[row][col] = A[row * lda + col]
       wmma::load_matrix_sync(a_frag, a + aRow * lda + aCol, lda);
       wmma::load_matrix_sync(b_frag, b + bRow * ldb + bCol, ldb);
 
@@ -50,8 +52,6 @@ __global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,
   int cCol = warpN * WMMA_N;
 
   if (cRow < M && cCol < N) {
-    // wmma::load_matrix_sync(c_frag, c + cRow * ldc + cCol, ldc,
-    //                        wmma::mem_row_major);
 
     #pragma unroll
     for (int i = 0; i < c_frag.num_elements; i++) {
@@ -67,18 +67,15 @@ __global__ void wmma_naive_gemm(half *a, half *b, float *c, float alpha,
 void launch_wmma_kernel(
     half* matrix_a,
     half* matrix_b,
-    float* matrix_out
+    float* matrix_out,
+    int M , int N , int K
 ){
     dim3 block_dim(32 , 4);
     dim3 grid_dim(
         (M + WMMA_M - 1) / WMMA_M / (block_dim.x / WARP_SIZE),
         (N + WMMA_N - 1) / WMMA_N / block_dim.y
     );
-    wmma_naive_gemm<<<grid_dim , block_dim>>>(matrix_a , matrix_b , matrix_out , 1 , 0);
+    wmma_naive_gemm<<<grid_dim , block_dim>>>(matrix_a , matrix_b , matrix_out , 1 , 0 , M , N , K);
 
 
-}
-
-int main(){    
-    benchmark_fp16(launch_wmma_kernel, "WMMA_2 NAIVE ");
 }
