@@ -1,6 +1,5 @@
 #include <cuda_runtime.h>
 
-#include <iostream>
 #include "../inc/util.cuh"
 /*
 Naive implementation cuz who cares about flops anyways
@@ -19,7 +18,7 @@ __global__ void naive_matmul_kernel(
   // matrix a -> access -> matrix_a[global_index_x * K + k]
   // matrix b -> access -> matrix_b[k * N + global_index_y]
   // matrix c -> store -> matrix_c[global_index_x * N + k]
-  if (global_index_x < M && global_index_y < N) {
+  if (global_index_x < M && global_index_y < N) { 
     float sum = 0.0f;
     for (int i = 0; i < K; i++) {
       sum += matrix_a[global_index_y * K + i] * matrix_b[i * N + global_index_x];
